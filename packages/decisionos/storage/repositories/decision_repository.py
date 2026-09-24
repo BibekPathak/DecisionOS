@@ -49,6 +49,19 @@ class DecisionRecord:
 
 
 @dataclass
+class PolicyEvaluationView:
+    """A read-only view of a persisted policy evaluation."""
+
+    decision_id: str
+    policy_name: str
+    policy_version: int
+    precedence: str
+    overridden: bool
+    final_action: str
+    triggered_rules: list[str]
+
+
+@dataclass
 class DecisionFilter:
     """Filters for listing decisions (used by the dashboard and API)."""
 
@@ -232,6 +245,26 @@ class DecisionRepository:
         await self._session.flush()
         return outcome_to_domain(row)
 
+    async def get_policy_evaluation(self, decision_id: str) -> PolicyEvaluationView | None:
+        result = await self._session.execute(
+            select(PolicyEvaluationRow)
+            .where(PolicyEvaluationRow.decision_id == decision_id)
+            .order_by(PolicyEvaluationRow.id.desc())
+            .limit(1)
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            return None
+        return PolicyEvaluationView(
+            decision_id=row.decision_id,
+            policy_name=row.policy_name,
+            policy_version=row.policy_version,
+            precedence=row.precedence,
+            overridden=row.overridden,
+            final_action=row.final_action,
+            triggered_rules=list(row.triggered_rules or []),
+        )
+
     async def get_outcome(self, decision_id: str) -> Outcome | None:
         result = await self._session.execute(
             select(DecisionOutcomeRow)
@@ -255,4 +288,9 @@ class DecisionRepository:
         return result.scalar_one_or_none()
 
 
-__all__ = ["DecisionFilter", "DecisionRecord", "DecisionRepository"]
+__all__ = [
+    "DecisionFilter",
+    "DecisionRecord",
+    "DecisionRepository",
+    "PolicyEvaluationView",
+]

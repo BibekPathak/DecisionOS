@@ -28,6 +28,7 @@ from decisionos.storage.repositories import (
     DecisionRecord,
     DecisionRepository,
     DecisionSchemaRepository,
+    PolicyEvaluationView,
     PolicyRepository,
 )
 
@@ -42,6 +43,7 @@ __all__ = [
     "IdempotencyStore",
     "InMemoryBackend",
     "KeyValueBackend",
+    "PolicyEvaluationView",
     "PolicyRepository",
     "RateLimitResult",
     "RateLimiter",

@@ -11,6 +11,7 @@ from decisionos.storage.repositories.decision_repository import (
     DecisionFilter,
     DecisionRecord,
     DecisionRepository,
+    PolicyEvaluationView,
 )
 from decisionos.storage.repositories.schema_repository import (
     DecisionSchemaRepository,
@@ -22,5 +23,6 @@ __all__ = [
     "DecisionRecord",
     "DecisionRepository",
     "DecisionSchemaRepository",
+    "PolicyEvaluationView",
     "PolicyRepository",
 ]

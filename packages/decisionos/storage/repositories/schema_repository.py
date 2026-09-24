@@ -36,7 +36,7 @@ class DecisionSchemaRepository:
         """
         existing = await self._get_row(schema.name, schema.version)
         if existing is not None:
-            if schema_to_domain(existing) != schema:
+            if not _same_schema_content(existing, schema):
                 raise ValueError(f"schema {schema.key} already exists with different content")
             return schema_to_domain(existing)
 
@@ -160,3 +160,19 @@ class PolicyRepository:
 
 
 __all__ = ["DecisionSchemaRepository", "PolicyRepository"]
+
+
+def _same_schema_content(row: DecisionSchemaRow, schema: DecisionSchema) -> bool:
+    """Compare a stored schema against a candidate, ignoring server-set fields.
+
+    ``created_at`` is assigned on insertion and must not participate in the
+    immutability check, otherwise re-registering identical content would be
+    treated as a conflict.
+    """
+    return (
+        row.name == schema.name
+        and row.version == schema.version
+        and tuple(row.actions) == tuple(schema.actions)
+        and dict(row.action_descriptions or {}) == dict(schema.action_descriptions)
+        and row.description == schema.description
+    )

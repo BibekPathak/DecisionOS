@@ -69,3 +69,47 @@ async def session(engine) -> AsyncSession:
     factory = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
     async with factory() as session:
         yield session
+
+
+@pytest_asyncio.fixture()
+async def api_client(engine):
+    """An HTTP client bound to the DecisionOS app, sharing the test database.
+
+    Runs entirely on the pytest-asyncio event loop via ASGITransport so the
+    app and the test share one loop and connection pool.
+    """
+    import httpx
+
+    from api.main import create_app
+    from decisionos.config import Settings
+    from decisionos.providers import reset_registry
+    from decisionos.storage import Database
+    from decisionos.storage.redis import InMemoryBackend
+
+    settings = Settings(
+        _env_file=None,
+        app_env="test",
+        database_url=TEST_DATABASE_URL,
+        rate_limit_per_minute=10_000,
+    )
+    database = Database(settings)
+    app = create_app(settings, database=database)
+
+    # Enter the lifespan manually so app.state is populated.
+    async with app.router.lifespan_context(app):
+        # Replace the Redis backend with an in-memory one for hermetic tests.
+        from decisionos.storage import IdempotencyStore, RateLimiter
+
+        in_memory = InMemoryBackend()
+        app.state.redis_backend = in_memory
+        app.state.idempotency = IdempotencyStore(
+            in_memory, ttl_seconds=settings.idempotency_ttl_seconds
+        )
+        app.state.rate_limiter = RateLimiter(in_memory, limit=settings.rate_limit_per_minute)
+
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            yield client
+
+    await database.dispose()
+    reset_registry()

@@ -127,6 +127,9 @@ class EvaluationResult:
     ----------
     decision:
         The validated (and, if a policy ran, policy-resolved) decision.
+    model_decision:
+        The model's decision before any policy was applied. Equal to
+        ``decision`` when no policy ran or the policy did not override.
     events:
         The audit trail produced while evaluating.
     overridden:
@@ -136,9 +139,11 @@ class EvaluationResult:
     """
 
     decision: Decision
+    model_decision: Decision | None = None
     events: list = field(default_factory=list)
     overridden: bool = False
     triggered_rules: list[str] = field(default_factory=list)
+    precedence: str | None = None
 
 
 class DecisionEvaluator:
@@ -220,7 +225,11 @@ class DecisionEvaluator:
             provider_elapsed_ms=round(provider_elapsed_ms, 3),
         )
 
-        result = EvaluationResult(decision=decision, events=list(lifecycle.events))
+        result = EvaluationResult(
+            decision=decision,
+            model_decision=decision,
+            events=list(lifecycle.events),
+        )
 
         if policy_evaluator is not None:
             outcome = await policy_evaluator.evaluate(decision, dict(request.context))
@@ -232,6 +241,7 @@ class DecisionEvaluator:
             result.decision = outcome.decision
             result.overridden = outcome.overridden
             result.triggered_rules = list(outcome.triggered_rules)
+            result.precedence = outcome.precedence
             result.events = list(lifecycle.events)
 
         return result
