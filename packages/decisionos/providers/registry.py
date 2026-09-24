@@ -81,6 +81,28 @@ class ProviderRegistry:
             self._instances["mock"] = MockProvider()
         return self._instances["mock"]
 
+    async def aclose(self) -> None:
+        """Close any provider that holds resources (e.g. an HTTP client)."""
+        for instance in self._instances.values():
+            closer = getattr(instance, "aclose", None)
+            if closer is not None:
+                try:
+                    await closer()
+                except Exception as error:  # pragma: no cover - best effort
+                    logger.warning("provider.close_failed", error=str(error))
+        self._instances.clear()
+
+    def close(self) -> None:
+        """Synchronously close providers, if the event loop is unavailable."""
+        for instance in self._instances.values():
+            closer = getattr(instance, "close", None)
+            if closer is not None:
+                try:
+                    closer()
+                except Exception as error:  # pragma: no cover - best effort
+                    logger.warning("provider.close_failed", error=str(error))
+        self._instances.clear()
+
 
 _REGISTRY: ProviderRegistry | None = None
 

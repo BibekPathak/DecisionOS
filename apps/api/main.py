@@ -76,6 +76,7 @@ def create_app(
             yield
         finally:
             await backend.close()
+            await app.state.provider_registry.aclose()
             if database is None:
                 await app.state.database.dispose()
             if provider_registry is None:
