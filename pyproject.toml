@@ -81,3 +81,6 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "-q"
 filterwarnings = ["ignore::DeprecationWarning"]
+markers = [
+    "integration: tests that require PostgreSQL or Redis services",
+]

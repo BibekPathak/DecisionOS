@@ -1,8 +1,8 @@
 """Alembic migration environment.
 
 Reads the database URL from DecisionOS settings so migrations share the same
-configuration as the application. Connection handling and the metadata target
-are fully wired in Phase 5, when the schema models are introduced.
+configuration as the application, and targets the ORM metadata declared in
+``decisionos.storage``.
 """
 
 from __future__ import annotations
@@ -16,14 +16,17 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from decisionos.config import get_settings
+from decisionos.storage.database import Base
+
+# Import models so their tables are registered on Base.metadata.
+import decisionos.storage.models  # noqa: F401  (side-effect import)
 
 config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Populated in Phase 5 with the declarative Base metadata.
-target_metadata = None
+target_metadata = Base.metadata
 
 settings = get_settings()
 config.set_main_option("sqlalchemy.url", settings.database_url)
