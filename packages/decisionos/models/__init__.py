@@ -14,6 +14,7 @@ from decisionos.models.enums import (
 )
 from decisionos.models.outcome import Outcome
 from decisionos.models.policy import (
+    DEFAULT_ACTION_PRECEDENCE,
     DERIVED_FIELDS,
     SUPPORTED_OPERATORS,
     Policy,
@@ -30,6 +31,7 @@ from decisionos.models.types import (
 )
 
 __all__ = [
+    "DEFAULT_ACTION_PRECEDENCE",
     "DEFAULT_MAX_CONTEXT_BYTES",
     "DERIVED_FIELDS",
     "PROBABILITY_SUM_TOLERANCE",

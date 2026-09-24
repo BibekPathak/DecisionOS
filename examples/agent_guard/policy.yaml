@@ -1,0 +1,49 @@
+# Production AgentGuard policy.
+#
+# Deterministic control layered on top of probabilistic provider output.
+# A model can never bypass a HARD_DENY (deny) or REQUIRED_HUMAN_REVIEW
+# (human_review) rule below.
+
+name: production-agent-policy
+version: 1
+description: Tool authorization policy for production AI agents.
+
+rules:
+  # Destructive data operations are always denied.
+  - name: dangerous-database-operation
+    when:
+      tool: database.delete
+    action:
+      require: deny
+
+  # Merging in a production repository always requires a human.
+  - name: production-merge
+    when:
+      environment: production
+      tool: github.merge
+    action:
+      require: human_review
+
+  # Credential rotation in production requires a human.
+  - name: rotate-production-credentials
+    when:
+      environment: production
+      tool: rotate_credentials
+    action:
+      require: human_review
+
+  # Very high model-estimated risk is denied outright.
+  - name: high-risk
+    when:
+      risk:
+        gt: 0.90
+    action:
+      require: deny
+
+  # Low-confidence model output is escalated rather than acted upon.
+  - name: low-confidence
+    when:
+      confidence:
+        lt: 0.70
+    action:
+      require: human_review

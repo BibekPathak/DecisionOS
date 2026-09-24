@@ -1,0 +1,43 @@
+# Deployment rollback policy.
+#
+# Simulator only: DecisionOS never modifies infrastructure. This policy
+# determines which action the calling system is permitted to take.
+
+name: deployment-rollback-policy
+version: 1
+description: Guardrails for automated deployment rollback decisions.
+
+rules:
+  # A severe error-rate spike on a recent deployment forces a rollback.
+  - name: severe-error-rate
+    when:
+      error_rate:
+        gt: 0.25
+    action:
+      require: rollback
+
+  # Rapid latency regression is treated as a high-risk rollback signal.
+  - name: latency-regression
+    when:
+      risk:
+        gt: 0.85
+    action:
+      require: rollback
+
+  # Extreme risk is escalated to a human rather than auto-rolled back. The
+  # DeploymentDecision schema has no 'deny' action; 'human_review' is the
+  # safest deterministic outcome available.
+  - name: extreme-risk
+    when:
+      risk:
+        gt: 0.97
+    action:
+      require: human_review
+
+  # Low-confidence model output is escalated to a human, never auto-rolled back.
+  - name: low-confidence
+    when:
+      confidence:
+        lt: 0.70
+    action:
+      require: human_review

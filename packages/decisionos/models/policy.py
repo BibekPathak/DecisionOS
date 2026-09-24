@@ -26,9 +26,25 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from decisionos.models.enums import PolicyPrecedence
+
 # Fields that may appear on the left-hand side of a condition and are derived
 # from the decision itself rather than the raw context.
 DERIVED_FIELDS: frozenset[str] = frozenset({"risk", "confidence", "action"})
+
+# Well-known action names mapped to a default precedence category. Policies may
+# override these via ``action_precedence``; unmapped actions default to
+# ``MODEL_DECISION``. This lets the policy engine enforce that a required
+# "deny" always outranks the model without hard-coding a single vocabulary.
+DEFAULT_ACTION_PRECEDENCE: dict[str, PolicyPrecedence] = {
+    "deny": PolicyPrecedence.HARD_DENY,
+    "block": PolicyPrecedence.HARD_DENY,
+    "reject": PolicyPrecedence.HARD_DENY,
+    "human_review": PolicyPrecedence.REQUIRED_HUMAN_REVIEW,
+    "review": PolicyPrecedence.REQUIRED_HUMAN_REVIEW,
+    "escalate": PolicyPrecedence.REQUIRED_HUMAN_REVIEW,
+    "pause": PolicyPrecedence.REQUIRED_HUMAN_REVIEW,
+}
 
 # Operators accepted inside a condition mapping.
 SUPPORTED_OPERATORS: frozenset[str] = frozenset(
@@ -118,6 +134,7 @@ class Policy(BaseModel):
     version: int = Field(ge=1)
     rules: tuple[PolicyRule, ...] = Field(min_length=1)
     description: str | None = None
+    action_precedence: dict[str, PolicyPrecedence] = Field(default_factory=dict)
 
     @field_validator("name")
     @classmethod
@@ -141,7 +158,23 @@ class Policy(BaseModel):
         # ``when.action`` refers to the model's suggested action, so any value
         # is structurally valid here; membership in a schema is enforced when a
         # policy is bound to a decision.
+        required = {rule.action.require for rule in self.rules}
+        unknown = set(self.action_precedence) - required
+        if unknown:
+            raise ValueError(
+                f"action_precedence references actions that no rule requires: {sorted(unknown)}"
+            )
         return self
+
+    def precedence_for(self, action: str) -> PolicyPrecedence:
+        """Return the precedence category for ``action``.
+
+        An explicit ``action_precedence`` entry wins; otherwise the
+        well-known defaults apply, falling back to ``MODEL_DECISION``.
+        """
+        if action in self.action_precedence:
+            return self.action_precedence[action]
+        return DEFAULT_ACTION_PRECEDENCE.get(action, PolicyPrecedence.MODEL_DECISION)
 
     @property
     def key(self) -> str:
@@ -150,6 +183,7 @@ class Policy(BaseModel):
 
 
 __all__ = [
+    "DEFAULT_ACTION_PRECEDENCE",
     "DERIVED_FIELDS",
     "SUPPORTED_OPERATORS",
     "Policy",
