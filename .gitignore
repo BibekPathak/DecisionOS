@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.hypothesis/
+.coverage
+htmlcov/
+.venv/
+venv/
+dist/
+build/
+
+# Env / secrets (never commit)
+.env
+.env.*
+!.env.example
+
+# Node / dashboard
+node_modules/
+.next/
+out/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+
+# Local data
+*.log
+*.sqlite
+*.db
