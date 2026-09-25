@@ -19,6 +19,7 @@ from api.services import (
     PolicyService,
     SchemaService,
 )
+from decisionos.calibration import DatabaseCalibrationSource
 from decisionos.config import Settings
 from decisionos.engine import DecisionEvaluator
 from decisionos.observability.logging import get_logger
@@ -127,8 +128,7 @@ def get_policy_service(session: SessionDep) -> PolicyService:
 
 
 def get_calibration_service(session: SessionDep) -> CalibrationService:
-    del session  # Phase 9 will read outcomes through the repository.
-    return CalibrationService()
+    return CalibrationService(DatabaseCalibrationSource(session))
 
 
 DecisionServiceDep = Annotated[DecisionService, Depends(get_decision_service)]

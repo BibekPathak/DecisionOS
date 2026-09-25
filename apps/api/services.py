@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from api.schemas import (
+    CalibrationBucket,
     CalibrationResponse,
     CreateDecisionRequest,
     CreatePolicyRequest,
@@ -24,6 +25,11 @@ from api.schemas import (
     RecordOutcomeRequest,
     SchemaResponse,
 )
+from decisionos.calibration import (
+    CalibrationEvaluator,
+    CalibrationFilter,
+    DatabaseCalibrationSource,
+)
 from decisionos.engine import (
     DecisionEvaluator,
     EvaluationResult,
@@ -37,6 +43,7 @@ from decisionos.models import (
     Outcome,
     Policy,
 )
+from decisionos.observability.metrics import set_calibration_error
 from decisionos.policies import PolicyEvaluator, PolicyNotFoundError
 from decisionos.storage import (
     DecisionFilter,
@@ -354,14 +361,37 @@ class PolicyService:
 
 
 class CalibrationService:
-    """Placeholder calibration reporting.
+    """Computes calibration from stored decisions and their outcomes.
 
-    Real Brier/ECE computation lands in Phase 9. Until then the endpoint
-    returns an empty, honestly-labelled report rather than fabricated numbers.
+    The report contains only measured statistics over decisions that have a
+    recorded outcome; there are no synthetic numbers.
     """
 
-    async def report(self) -> CalibrationResponse:
-        return CalibrationResponse(sample_count=0)
+    def __init__(self, source: DatabaseCalibrationSource) -> None:
+        self._evaluator = CalibrationEvaluator(source)
+
+    async def report(self, filter: CalibrationFilter | None = None) -> CalibrationResponse:
+        report = await self._evaluator.report(filter)
+        if report.expected_calibration_error is not None:
+            set_calibration_error(
+                decision_type=(filter.decision_type if filter else None) or "all",
+                value=report.expected_calibration_error,
+            )
+        return CalibrationResponse(
+            sample_count=report.sample_count,
+            brier_score=report.brier_score,
+            expected_calibration_error=report.expected_calibration_error,
+            buckets=[
+                CalibrationBucket(
+                    lower=bucket.lower,
+                    upper=bucket.upper,
+                    count=bucket.count,
+                    accuracy=bucket.accuracy,
+                    avg_confidence=bucket.avg_confidence,
+                )
+                for bucket in report.buckets
+            ],
+        )
 
 
 __all__ = [

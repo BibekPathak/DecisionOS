@@ -236,6 +236,85 @@ async def test_calibration_returns_honest_empty_report(api_client) -> None:
     assert body["buckets"] == []
 
 
+async def _create_decision_with_outcome(api_client, *, context: dict, success: bool) -> str:
+    created = (
+        await api_client.post("/v1/decisions", json={**DECISION_BODY, "context": context})
+    ).json()
+    decision_id = created["decision_id"]
+    response = await api_client.post(
+        f"/v1/decisions/{decision_id}/outcome",
+        json={"actual_outcome": "safe" if success else "unsafe", "success": success},
+    )
+    assert response.status_code == 201
+    return decision_id
+
+
+async def test_calibration_uses_recorded_outcomes(api_client) -> None:
+    await _register_schema(api_client)
+    context = {
+        "agent": "deploy-agent",
+        "tool": "github.merge",
+        "repository": "production-repo",
+        "tests_passed": False,
+    }
+    await _create_decision_with_outcome(api_client, context=context, success=True)
+    await _create_decision_with_outcome(api_client, context=context, success=False)
+    response = await api_client.get("/v1/calibration")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["sample_count"] == 2
+    assert body["brier_score"] is not None
+    assert body["expected_calibration_error"] is not None
+    assert sum(bucket["count"] for bucket in body["buckets"]) == 2
+
+
+async def test_calibration_ignores_decisions_without_outcomes(api_client) -> None:
+    await _register_schema(api_client)
+    await api_client.post("/v1/decisions", json=DECISION_BODY)
+    body = (await api_client.get("/v1/calibration")).json()
+    assert body["sample_count"] == 0
+
+
+async def test_calibration_filters_by_provider(api_client) -> None:
+    await _register_schema(api_client)
+    await _create_decision_with_outcome(api_client, context={"tool": "read_file"}, success=True)
+    matching = (await api_client.get("/v1/calibration", params={"provider": "mock"})).json()
+    assert matching["sample_count"] == 1
+    non_matching = (await api_client.get("/v1/calibration", params={"provider": "jev"})).json()
+    assert non_matching["sample_count"] == 0
+
+
+async def test_calibration_filters_by_decision_type(api_client) -> None:
+    await _register_schema(api_client)
+    await _create_decision_with_outcome(api_client, context={"tool": "read_file"}, success=True)
+    matching = (
+        await api_client.get("/v1/calibration", params={"decision_type": "tool_authorization"})
+    ).json()
+    assert matching["sample_count"] == 1
+    non_matching = (
+        await api_client.get("/v1/calibration", params={"decision_type": "other"})
+    ).json()
+    assert non_matching["sample_count"] == 0
+
+
+async def test_calibration_filters_by_action(api_client) -> None:
+    await _register_schema(api_client)
+    await _create_decision_with_outcome(api_client, context={"tool": "read_file"}, success=True)
+    matching = (await api_client.get("/v1/calibration", params={"action": "allow"})).json()
+    assert matching["sample_count"] == 1
+    non_matching = (await api_client.get("/v1/calibration", params={"action": "deny"})).json()
+    assert non_matching["sample_count"] == 0
+
+
+async def test_calibration_sets_metric_gauge(api_client) -> None:
+    from decisionos.observability.metrics import render_metrics
+
+    await _register_schema(api_client)
+    await _create_decision_with_outcome(api_client, context={"tool": "read_file"}, success=True)
+    assert (await api_client.get("/v1/calibration")).status_code == 200
+    assert "decisionos_calibration_error" in render_metrics()
+
+
 async def test_context_size_limit_enforced(api_client) -> None:
     await _register_schema(api_client)
     big = {**DECISION_BODY, "context": {"blob": "x" * (70 * 1024)}}
