@@ -13,10 +13,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 
+from api.middleware import RequestContextMiddleware
 from api.routes import calibration, decisions, policies, schemas
 from decisionos import __version__
 from decisionos.config import Settings, get_settings
 from decisionos.observability.logging import configure_logging, get_logger
+from decisionos.observability.tracing import configure_tracing, shutdown_tracing
 from decisionos.providers import ProviderRegistry, get_registry, reset_registry
 from decisionos.storage import (
     Database,
@@ -47,6 +49,7 @@ def create_app(
     """
     settings = settings or get_settings()
     configure_logging(settings.log_level, json_logs=settings.app_env != "test")
+    configure_tracing(settings)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -71,6 +74,7 @@ def create_app(
             default_provider=settings.default_provider,
             jev_configured=settings.jev_configured,
             auth_enabled=settings.auth_enabled,
+            tracing=bool(settings.otel_exporter_otlp_endpoint),
         )
         try:
             yield
@@ -81,6 +85,7 @@ def create_app(
                 await app.state.database.dispose()
             if provider_registry is None:
                 reset_registry()
+            shutdown_tracing()
             logger.info("decisionos.api.shutdown")
 
     app = FastAPI(
@@ -92,6 +97,7 @@ def create_app(
         lifespan=lifespan,
     )
 
+    app.add_middleware(RequestContextMiddleware)
     _install_error_handlers(app)
     app.include_router(decisions.router)
     app.include_router(schemas.router)

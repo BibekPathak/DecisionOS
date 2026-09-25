@@ -35,6 +35,7 @@ from decisionos.models import (
     PolicyPrecedence,
     PolicyRule,
 )
+from decisionos.observability.tracing import span
 from decisionos.policies.operators import MISSING, PolicyOperatorError, evaluate_condition
 
 # Rank of each precedence tier. Higher wins.
@@ -89,6 +90,20 @@ class PolicyEvaluator:
 
     async def evaluate(self, decision: Decision, context: dict[str, object]) -> PolicyOutcome:
         """Apply the policy to ``decision`` given ``context``."""
+        with span(
+            "decisionos.policy.evaluate",
+            **{
+                "decisionos.policy": self._policy.key,
+                "decisionos.model_action": decision.action,
+            },
+        ) as current:
+            outcome = self._evaluate(decision, context)
+            current.set_attribute("decisionos.final_action", outcome.decision.action)
+            current.set_attribute("decisionos.policy_overridden", outcome.overridden)
+            current.set_attribute("decisionos.policy_precedence", outcome.precedence)
+            return outcome
+
+    def _evaluate(self, decision: Decision, context: dict[str, object]) -> PolicyOutcome:
         namespace = self._build_namespace(decision, context)
         triggered = self._match_rules(namespace)
 

@@ -79,6 +79,23 @@ def _add_log_level(
     return event_dict
 
 
+def _merge_request_context(
+    _logger: Any,
+    _method_name: str,
+    event_dict: MutableMapping[str, Any],
+) -> MutableMapping[str, Any]:
+    """Attach the active request identifiers to every log record.
+
+    Explicit event fields win over context defaults so a caller may override a
+    value for a single record.
+    """
+    from decisionos.observability.context import get_request_context
+
+    for key, value in get_request_context().log_fields().items():
+        event_dict.setdefault(key, value)
+    return event_dict
+
+
 def configure_logging(level: str = "INFO", *, json_logs: bool = True) -> None:
     """Configure stdlib logging and structlog for JSON output.
 
@@ -104,6 +121,7 @@ def configure_logging(level: str = "INFO", *, json_logs: bool = True) -> None:
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_logger_name,
         _add_log_level,
+        _merge_request_context,
         structlog.processors.TimeStamper(fmt="iso", utc=True),
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,

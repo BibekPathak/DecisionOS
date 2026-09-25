@@ -37,7 +37,15 @@ from decisionos.models import (
     ProviderOutputError,
     RawDecision,
 )
+from decisionos.observability.context import request_context
 from decisionos.observability.logging import get_logger
+from decisionos.observability.metrics import (
+    observe_decision,
+    observe_provider_latency,
+    record_policy_override,
+    record_provider_error,
+)
+from decisionos.observability.tracing import span
 from decisionos.providers.base import DecisionProvider, ProviderError
 from decisionos.providers.registry import ProviderRegistry
 
@@ -192,58 +200,99 @@ class DecisionEvaluator:
 
         request.validate_context_size()
 
-        lifecycle = DecisionLifecycle(self._id_factory())
-        schema = await self._schemas.resolve(request.schema_name, request.schema_version)
+        decision_id = self._id_factory()
+        lifecycle = DecisionLifecycle(decision_id)
 
-        provider: DecisionProvider = self._registry.get(request.provider)
-        lifecycle.start_evaluation(
+        with request_context(decision_id=decision_id):
+            schema = await self._schemas.resolve(request.schema_name, request.schema_version)
+            provider: DecisionProvider = self._registry.get(request.provider)
+
+            with request_context(provider=provider.name, schema=schema.key) as enriched:
+                lifecycle.start_evaluation(
+                    provider=provider.name,
+                    schema_key=schema.key,
+                )
+
+                evaluation_started = time.perf_counter()
+                with span(
+                    "decisionos.evaluate",
+                    **{
+                        "decisionos.decision_id": decision_id,
+                        "decisionos.provider": provider.name,
+                        "decisionos.schema": schema.key,
+                        "decisionos.decision_type": request.decision_type,
+                        "decisionos.request_id": enriched.request_id,
+                    },
+                ):
+                    started = time.perf_counter()
+                    try:
+                        raw = await provider.evaluate(request, schema)
+                    except ProviderError as error:
+                        lifecycle.fail(
+                            error_kind=error.kind,
+                            provider=error.provider,
+                            message=str(error),
+                        )
+                        record_provider_error(provider=error.provider, kind=error.kind)
+                        raise
+                    provider_elapsed_ms = (time.perf_counter() - started) * 1000.0
+                    observe_provider_latency(
+                        provider=provider.name,
+                        latency_seconds=provider_elapsed_ms / 1000.0,
+                    )
+
+                    decision = self._build_decision(
+                        raw,
+                        request=request,
+                        schema=schema,
+                        decision_id=decision_id,
+                    )
+                    lifecycle.complete_evaluation(
+                        action=decision.action,
+                        confidence=decision.confidence,
+                        provider_elapsed_ms=round(provider_elapsed_ms, 3),
+                    )
+
+                    result = EvaluationResult(
+                        decision=decision,
+                        model_decision=decision,
+                        events=list(lifecycle.events),
+                    )
+
+                    if policy_evaluator is not None:
+                        outcome = await policy_evaluator.evaluate(decision, dict(request.context))
+                        lifecycle.complete_policy_evaluation(
+                            precedence=outcome.precedence,
+                            triggered_rules=outcome.triggered_rules,
+                        )
+                        lifecycle.select_action(action=outcome.decision.action)
+                        result.decision = outcome.decision
+                        result.overridden = outcome.overridden
+                        result.triggered_rules = list(outcome.triggered_rules)
+                        result.precedence = outcome.precedence
+                        result.events = list(lifecycle.events)
+                        if outcome.overridden:
+                            policy_name = _policy_name(policy_evaluator)
+                            record_policy_override(
+                                policy=policy_name,
+                                final_action=outcome.decision.action,
+                            )
+
+        observe_decision(
             provider=provider.name,
-            schema_key=schema.key,
+            action=result.decision.action,
+            decision_type=request.decision_type,
+            latency_seconds=time.perf_counter() - evaluation_started,
         )
-
-        started = time.perf_counter()
-        try:
-            raw = await provider.evaluate(request, schema)
-        except ProviderError as error:
-            lifecycle.fail(
-                error_kind=error.kind,
-                provider=error.provider,
-                message=str(error),
-            )
-            raise
-        provider_elapsed_ms = (time.perf_counter() - started) * 1000.0
-
-        decision = self._build_decision(
-            raw,
-            request=request,
-            schema=schema,
-            decision_id=lifecycle.decision_id,
+        logger.info(
+            "decision.evaluated",
+            decision_id=decision_id,
+            provider=provider.name,
+            schema=schema.key,
+            action=result.decision.action,
+            confidence=result.decision.confidence,
+            overridden=result.overridden,
         )
-        lifecycle.complete_evaluation(
-            action=decision.action,
-            confidence=decision.confidence,
-            provider_elapsed_ms=round(provider_elapsed_ms, 3),
-        )
-
-        result = EvaluationResult(
-            decision=decision,
-            model_decision=decision,
-            events=list(lifecycle.events),
-        )
-
-        if policy_evaluator is not None:
-            outcome = await policy_evaluator.evaluate(decision, dict(request.context))
-            lifecycle.complete_policy_evaluation(
-                precedence=outcome.precedence,
-                triggered_rules=outcome.triggered_rules,
-            )
-            lifecycle.select_action(action=outcome.decision.action)
-            result.decision = outcome.decision
-            result.overridden = outcome.overridden
-            result.triggered_rules = list(outcome.triggered_rules)
-            result.precedence = outcome.precedence
-            result.events = list(lifecycle.events)
-
         return result
 
     def _build_decision(
@@ -291,6 +340,13 @@ class DecisionEvaluator:
 
 def _new_decision_id() -> str:
     return f"dec_{uuid.uuid4().hex}"
+
+
+def _policy_name(policy_evaluator: PolicyEvaluationLike) -> str:
+    """Best-effort policy name for metrics, without importing the engine type."""
+    policy = getattr(policy_evaluator, "policy", None)
+    name = getattr(policy, "name", None)
+    return name if isinstance(name, str) and name else "unknown"
 
 
 __all__ = [
