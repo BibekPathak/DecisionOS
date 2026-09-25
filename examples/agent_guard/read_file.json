@@ -1,0 +1,6 @@
+{
+  "agent": "deploy-agent",
+  "tool": "read_file",
+  "repository": "org/project",
+  "environment": "production"
+}

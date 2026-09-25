@@ -53,10 +53,17 @@ health: ## Run the DecisionOS health command
 dashboard: ## Run the dashboard dev server
 	cd apps/dashboard && npm run dev
 
-demo: ## Run the AgentGuard demo (added in a later phase)
+demo: ## Run the AgentGuard flagship demo
+	$(PYTHON) -m decisionos.cli demo agent_guard
+
+demo-rollback: ## Run the deployment rollback simulator
+	$(PYTHON) -m decisionos.cli demo deployment_rollback
+
+evaluate: ## Evaluate the AgentGuard merge context (flagship example)
 	$(PYTHON) -m decisionos.cli evaluate \
 		--schema ToolAuthorization \
-		--context examples/agent_guard/merge.json
+		--context examples/agent_guard/merge.json \
+		--policy examples/agent_guard/policy.yaml
 
 clean: ## Remove caches and build artifacts
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +

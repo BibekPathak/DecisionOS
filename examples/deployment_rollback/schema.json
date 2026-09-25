@@ -1,0 +1,17 @@
+{
+  "name": "DeploymentDecision",
+  "version": 1,
+  "description": "Decides whether an automated deployment should continue, roll back, pause, or escalate.",
+  "actions": [
+    "continue",
+    "rollback",
+    "pause",
+    "human_review"
+  ],
+  "action_descriptions": {
+    "continue": "The deployment is healthy; let it proceed.",
+    "rollback": "Revert the deployment to the previous version.",
+    "pause": "Hold the deployment without reverting while more signal is gathered.",
+    "human_review": "Escalate to a human before taking any further automated action."
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "error_rate": 0.002,
+  "latency_p99_ms": 330,
+  "baseline_latency_p99_ms": 320,
+  "deployment_age_seconds": 900,
+  "recent_deployment": false,
+  "rollback_available": true
+}

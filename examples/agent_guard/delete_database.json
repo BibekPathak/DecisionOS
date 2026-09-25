@@ -1,0 +1,6 @@
+{
+  "agent": "deploy-agent",
+  "tool": "database.delete",
+  "repository": "org/project",
+  "environment": "production"
+}

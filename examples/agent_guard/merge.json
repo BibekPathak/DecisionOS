@@ -1,0 +1,7 @@
+{
+  "agent": "deploy-agent",
+  "tool": "github.merge",
+  "repository": "org/project",
+  "environment": "production",
+  "tests_passed": false
+}

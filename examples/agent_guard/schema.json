@@ -1,0 +1,15 @@
+{
+  "name": "ToolAuthorization",
+  "version": 1,
+  "description": "Authorizes an AI agent's request to use a tool.",
+  "actions": [
+    "allow",
+    "human_review",
+    "deny"
+  ],
+  "action_descriptions": {
+    "allow": "The tool call is permitted to proceed automatically.",
+    "human_review": "The tool call requires an explicit human approval before it may proceed.",
+    "deny": "The tool call is refused and must not proceed."
+  }
+}

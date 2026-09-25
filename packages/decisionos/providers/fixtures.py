@@ -137,6 +137,17 @@ _ROLLBACK_TRIGGERED = MockFixture(
     reason_codes=["error_rate_spike", "latency_regression", "recent_deployment"],
 )
 
+# A healthy, settled deployment: continue with high confidence.
+_ROLLBACK_HEALTHY = MockFixture(
+    schema_name="DeploymentDecision",
+    match={"recent_deployment": False, "error_rate": 0.002},
+    action="continue",
+    confidence=0.96,
+    probabilities={"continue": 0.96, "rollback": 0.01, "pause": 0.02, "human_review": 0.01},
+    risk=0.04,
+    reason_codes=["healthy_metrics", "settled_deployment"],
+)
+
 # Order matters: more specific fixtures are listed first.
 FIXTURES: tuple[MockFixture, ...] = (
     _AGENT_GUARD_MERGE_SPEC,
@@ -145,6 +156,7 @@ FIXTURES: tuple[MockFixture, ...] = (
     _AGENT_GUARD_READ_FILE,
     _AGENT_GUARD_ROTATE_CREDENTIALS,
     _ROLLBACK_TRIGGERED,
+    _ROLLBACK_HEALTHY,
     _ROLLBACK_UNAVAILABLE,
 )
 
