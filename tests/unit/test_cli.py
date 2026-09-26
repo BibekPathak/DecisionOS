@@ -122,3 +122,54 @@ def test_evaluate_unknown_schema_without_file_errors() -> None:
         ],
     )
     assert result.exit_code != 0
+
+
+# --- server-backed commands (offline validation) ---------------------------
+
+
+def test_schemas_validate_valid() -> None:
+    result = runner.invoke(
+        app, ["schemas", "validate", str(EXAMPLES / "agent_guard" / "schema.json")]
+    )
+    assert result.exit_code == 0
+    assert "valid: ToolAuthorization@1" in result.stdout
+
+
+def test_schemas_validate_invalid(tmp_path) -> None:
+    bad = tmp_path / "schema.json"
+    bad.write_text('{"name": "S", "version": 1, "actions": []}', encoding="utf-8")
+    result = runner.invoke(app, ["schemas", "validate", str(bad)])
+    assert result.exit_code != 0
+
+
+def test_schemas_validate_missing_file() -> None:
+    result = runner.invoke(app, ["schemas", "validate", "/nonexistent.json"])
+    assert result.exit_code != 0
+
+
+def test_policies_validate_valid() -> None:
+    result = runner.invoke(
+        app, ["policies", "validate", str(EXAMPLES / "agent_guard" / "policy.yaml")]
+    )
+    assert result.exit_code == 0
+    assert "valid: production-agent-policy@1" in result.stdout
+
+
+def test_policies_validate_invalid(tmp_path) -> None:
+    bad = tmp_path / "policy.yaml"
+    bad.write_text("name: p\nrules: []\n", encoding="utf-8")
+    result = runner.invoke(app, ["policies", "validate", str(bad)])
+    assert result.exit_code != 0
+
+
+def test_decisions_help_lists_subcommands() -> None:
+    result = runner.invoke(app, ["decisions", "--help"])
+    assert result.exit_code == 0
+    for sub in ("list", "get", "outcome"):
+        assert sub in result.stdout
+
+
+def test_calibration_help_lists_report() -> None:
+    result = runner.invoke(app, ["calibration", "--help"])
+    assert result.exit_code == 0
+    assert "report" in result.stdout
