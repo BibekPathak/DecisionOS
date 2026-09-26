@@ -23,6 +23,7 @@ build/
 node_modules/
 .next/
 out/
+*.tsbuildinfo
 
 # OS / editors
 .DS_Store

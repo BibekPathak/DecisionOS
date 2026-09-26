@@ -53,6 +53,12 @@ health: ## Run the DecisionOS health command
 dashboard: ## Run the dashboard dev server
 	cd apps/dashboard && npm run dev
 
+dashboard-build: ## Production-build the dashboard
+	cd apps/dashboard && npm install && npm run build
+
+dashboard-lint: ## Lint and typecheck the dashboard
+	cd apps/dashboard && npm run lint && npm run typecheck
+
 demo: ## Run the AgentGuard flagship demo
 	$(PYTHON) -m decisionos.cli demo agent_guard
 

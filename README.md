@@ -53,3 +53,35 @@ simulator accepts `--case rolling_back`, `--case healthy`, or
 
 See `examples/agent_guard` and `examples/deployment_rollback` for the schemas,
 policies, and context fixtures.
+
+## Dashboard
+
+A Next.js dashboard (App Router, TypeScript, Tailwind, Recharts) visualizes the
+same data the API serves. Start the full stack:
+
+```bash
+docker compose up
+```
+
+Then open:
+
+- Dashboard — http://localhost:3000
+- API docs — http://localhost:8000/docs
+- Prometheus — http://localhost:9090
+- Grafana — http://localhost:3001
+
+Pages: Overview, Decisions, Decision detail, Schemas, Policies, Calibration,
+and Settings. Every view reads live data from the API and never fabricates
+statistics; empty states are shown honestly.
+
+For local development against a running API:
+
+```bash
+cd apps/dashboard
+npm install
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000 npm run dev
+```
+
+The dashboard container uses `DECISIONOS_API_URL` for server-side rendering and
+`NEXT_PUBLIC_API_BASE_URL` for browser requests (see `.env.example`).
+
