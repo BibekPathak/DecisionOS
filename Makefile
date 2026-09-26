@@ -5,7 +5,9 @@ PYTHON ?= python3
 UV ?= uv
 COMPOSE ?= docker compose
 
-.PHONY: help install dev down up test test-unit test-integration lint format migrate revision demo health dashboard clean
+.PHONY: help install dev down up test test-unit test-integration test-property \
+        lint format migrate revision health demo demo-rollback evaluate \
+        dashboard dashboard-build dashboard-lint clean
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -13,9 +15,10 @@ help: ## Show available targets
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 install: ## Create the local virtualenv and install dependencies (dev)
-	$(UV) sync --extra dev
+	$(UV) venv --python 3.13
+	$(UV) pip install -e ".[dev]"
 
-dev: ## Run the full local stack (api, postgres, redis, prometheus, grafana)
+dev: ## Run the full local stack (api, postgres, redis, prometheus, grafana, dashboard)
 	$(COMPOSE) up --build
 
 up: ## Start the stack in the background
@@ -32,6 +35,9 @@ test-unit: ## Run unit tests
 
 test-integration: ## Run integration tests
 	$(PYTHON) -m pytest tests/integration
+
+test-property: ## Run property-based tests
+	$(PYTHON) -m pytest tests/property
 
 lint: ## Lint the codebase
 	$(PYTHON) -m ruff check packages apps tests
